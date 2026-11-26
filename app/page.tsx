@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import PendingOverlay from '@/components/PendingOverlay';
 import { redirect } from 'next/navigation';
 import Logo from '@/components/Logo';
 import { getUserId } from '@/lib/session';
@@ -67,6 +68,7 @@ export default async function Home({ searchParams }: { searchParams: { error?: s
           <p className="mt-4 rounded-xl bg-bad/10 px-3 py-2 text-sm text-bad">{searchParams.error}</p>
         )}
         <form action={daftar ? register : login} className="mt-5 space-y-3.5">
+          <PendingOverlay label={daftar ? 'Membuat akun…' : 'Masuk…'} />
           {daftar && (
             <div>
               <label className="label" htmlFor="name">Nama</label>

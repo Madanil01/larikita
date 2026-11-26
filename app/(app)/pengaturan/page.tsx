@@ -1,4 +1,5 @@
 import { requireUser } from '@/lib/session';
+import PendingOverlay from '@/components/PendingOverlay';
 import { appUrl, stravaCreds, webhookUrl } from '@/lib/strava';
 import { disconnect, enableWebhook, removeStravaApp, saveStravaApp } from './actions';
 
@@ -52,6 +53,7 @@ export default async function Pengaturan({ searchParams }: { searchParams: { ok?
           <li>Salin <b>Client ID</b> dan <b>Client Secret</b> ke form di bawah.</li>
         </ol>
         <form action={saveStravaApp} className="grid gap-3 sm:grid-cols-2">
+          <PendingOverlay label="Menyimpan…" />
           <div>
             <label className="label" htmlFor="client_id">Client ID</label>
             <input id="client_id" name="client_id" inputMode="numeric" required defaultValue={user.strava_client_id ?? ''}
@@ -68,6 +70,7 @@ export default async function Pengaturan({ searchParams }: { searchParams: { ok?
         </form>
         {ownApp && (
           <form action={removeStravaApp}>
+            <PendingOverlay label="Menghapus…" />
             <button className="btn-ghost">Hapus aplikasi pribadi</button>
           </form>
         )}
@@ -83,6 +86,7 @@ export default async function Pengaturan({ searchParams }: { searchParams: { ok?
           <>
             <p className="muted">Tersambung ke atlet Strava #{user.strava_id}.</p>
             <form action={disconnect}>
+              <PendingOverlay label="Memutuskan Strava…" />
               <button className="btn-ghost">Putuskan Strava &amp; hapus data aktivitas</button>
             </form>
           </>
@@ -110,6 +114,7 @@ export default async function Pengaturan({ searchParams }: { searchParams: { ok?
             <p className="text-sm text-ink/50">Webhook butuh URL publik, tidak bisa dari localhost ({webhookUrl()}).</p>
           ) : (
             <form action={enableWebhook}>
+              <PendingOverlay label="Mengaktifkan webhook…" />
               <button className="btn">Aktifkan webhook</button>
             </form>
           )}

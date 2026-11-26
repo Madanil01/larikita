@@ -8,7 +8,11 @@ const display = Bricolage_Grotesque({ subsets: ['latin'], weight: ['500', '600',
 export const metadata: Metadata = {
   title: 'LariKita',
   description: 'Rencana latihan lari (5K sampai maraton) yang mengikuti data larimu',
+  // ikon diambil otomatis dari app/icon.svg & app/apple-icon.tsx
+  appleWebApp: { title: 'LariKita' },
 };
+
+export const viewport = { themeColor: '#F5F3EE' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

@@ -1,4 +1,5 @@
 import { requireUser } from '@/lib/session';
+import PendingOverlay from '@/components/PendingOverlay';
 import { getPlan, getSessions } from '@/lib/db';
 import { fmtDuration, todayIn } from '@/lib/dates';
 import { DAY_NAMES, DEFAULT_DAYS, DISTANCES, MARATHON_KM, distanceFor, riegel } from '@/lib/plan';
@@ -29,6 +30,7 @@ export default async function Rencana({ searchParams }: { searchParams: { error?
   return (
     <div className="grid gap-5 lg:grid-cols-3">
       <form action={savePlan} className="card space-y-4 lg:col-span-2">
+        <PendingOverlay label="Menyusun jadwal…" />
         <h1 className="font-display text-xl font-semibold">{plan ? 'Ubah rencana' : 'Buat rencana latihan'}</h1>
         {searchParams.error && <p className="rounded-lg border border-bad/30 bg-bad/10 px-3 py-2 text-sm text-bad">{searchParams.error}</p>}
         <div className="grid gap-4 sm:grid-cols-2">
