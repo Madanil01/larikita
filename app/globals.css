@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tema "Pagi di Lintasan": kertas hangat, tinta grafit, hijau pinus, aksen amber. Nilai = "R G B" untuk Tailwind. */
+:root {
+  color-scheme: light;
+  --paper: 245 243 238;
+  --card: 255 255 255;
+  --ink: 24 26 27;
+  --track: 34 84 66; /* hijau pinus: aksen utama */
+  --volt: 240 178 92; /* amber: sorotan kecil (badge, titik) */
+  --ok: 38 122 80;
+  --bad: 196 78 56;
+  --warn: 176 112 24;
+  --info: 52 98 150;
+}
+
+body {
+  background-color: rgb(var(--paper));
+  color: rgb(var(--ink));
+  min-height: 100vh;
+  font-feature-settings: 'tnum' 1; /* angka sama lebar: pace & jarak rapi sejajar */
+}
+
+::selection { background: rgb(var(--volt) / 0.45); }
+
+@layer components {
+  .card { @apply rounded-2xl border border-ink/[0.07] bg-card p-5 shadow-[0_1px_2px_rgb(var(--ink)/0.04)]; }
+  .muted { @apply text-sm text-ink/55; }
+  /* tombol utama: grafit gelap, teks terang */
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-medium text-paper transition hover:bg-track active:scale-[0.98] disabled:opacity-50; }
+  .btn-ghost { @apply inline-flex items-center gap-1.5 rounded-full border border-ink/10 bg-card px-3 py-1 text-xs font-medium text-ink/70 transition hover:border-ink/25 hover:text-ink disabled:opacity-50; }
+  .input { @apply w-full rounded-xl border border-ink/10 bg-paper/60 px-3 py-2 text-sm text-ink placeholder-ink/35 transition focus:border-track/50 focus:bg-card focus:outline-none focus:ring-4 focus:ring-track/10; }
+  .label { @apply mb-1 block text-xs font-medium text-ink/55; }
+  .eyebrow { @apply text-xs font-medium text-track; }
+  .chip { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium; }
+}
