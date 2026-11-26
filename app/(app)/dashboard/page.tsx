@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { requireUser } from '@/lib/session';
-import { db, getPlan, getRuns, getSessions, getStrength } from '@/lib/db';
+import { db, getPlans, getRuns, getSessions, getStrength, pickPlan } from '@/lib/db';
 import { addDays, dayName, diffDays, weekday, fmtDuration, fmtLong, fmtMedium, fmtPace, fmtShort, mondayOf, todayIn } from '@/lib/dates';
 import { compliance, currentWeek, matchSessions, phaseProgress, weeklyVolume } from '@/lib/stats';
 import { PHASES, distanceFor } from '@/lib/plan';
@@ -9,6 +9,7 @@ import VolumeChart from '@/components/VolumeChart';
 import Donut from '@/components/Donut';
 import ConnectedAccounts from '@/components/ConnectedAccounts';
 import Icon from '@/components/Icon';
+import PlanSwitcher from '@/components/PlanSwitcher';
 
 const HARI_PANJANG = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 
@@ -26,10 +27,11 @@ function Lanes() {
   );
 }
 
-export default async function Dashboard() {
+export default async function Dashboard({ searchParams }: { searchParams: { plan?: string } }) {
   const user = await requireUser();
-  const plan = await getPlan(user.id);
+  const plans = await getPlans(user.id);
   const today = todayIn(user.timezone);
+  const plan = pickPlan(plans, today, searchParams.plan);
   const first = user.name.split(' ')[0];
   const head = (
     <div>
@@ -47,7 +49,7 @@ export default async function Dashboard() {
             <Lanes />
             <p className="text-sm text-paper/60">Langkah pertama</p>
             <h2 className="mt-2 max-w-md font-display text-2xl font-semibold leading-snug">Belum ada rencana latihan. Isi lomba dan target waktumu, jadwalnya kami susun.</h2>
-            <Link href="/rencana" className="mt-6 inline-flex items-center gap-2 rounded-full bg-paper px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-volt">
+            <Link href="/rencana?baru=1" className="mt-6 inline-flex items-center gap-2 rounded-full bg-paper px-5 py-2.5 text-sm font-medium text-ink transition hover:bg-volt">
               Buat rencana <Icon name="arrow" className="h-4 w-4" />
             </Link>
           </section>
@@ -83,7 +85,13 @@ export default async function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {head}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        {head}
+        {plans.length === 1 && (
+          <Link href="/rencana?baru=1" className="btn-ghost">+ Tambah rencana lain</Link>
+        )}
+      </div>
+      <PlanSwitcher plans={plans} current={plan} today={today} basePath="/dashboard" />
 
       <div className="grid gap-5 lg:grid-cols-3">
         {/* Hitung mundur + sesi berikutnya */}
@@ -107,7 +115,7 @@ export default async function Dashboard() {
                   {next.type === 'strength' ? 'Strength' : `${next.distance_km} km`}
                   {next.pace_sec ? ` · ${next.target_sec ? `target ${fmtDuration(next.target_sec)}` : fmtPace(next.pace_sec)}` : ''}
                 </p>
-                <Link href="/jadwal" className="mt-3 inline-flex items-center gap-1 text-xs text-paper/60 hover:text-paper">
+                <Link href={`/jadwal?plan=${plan.id}`} className="mt-3 inline-flex items-center gap-1 text-xs text-paper/60 hover:text-paper">
                   Lihat jadwal <Icon name="arrow" className="h-3.5 w-3.5" />
                 </Link>
               </div>

@@ -88,9 +88,27 @@ export interface Activity {
 
 export const RUN_TYPES = ['Run', 'TrailRun', 'VirtualRun'];
 
-export async function getPlan(userId: number): Promise<Plan | null> {
-  const rows = await db()<Plan[]>`select * from plans where user_id = ${userId}`;
-  return rows[0] ?? null;
+/** Maksimal rencana per user */
+export const MAX_PLANS = 5;
+
+/** Semua rencana user, urut tanggal lomba */
+export async function getPlans(userId: number): Promise<Plan[]> {
+  return db()<Plan[]>`select * from plans where user_id = ${userId} order by race_date, id`;
+}
+
+/** Rencana yang belum lewat (lomba hari ini atau nanti) */
+export const activePlans = (plans: Plan[], today: string) => plans.filter((p) => p.race_date >= today);
+
+/**
+ * Rencana yang sedang dilihat: sesuai ?plan=ID kalau ada, kalau tidak lomba terdekat yang belum lewat,
+ * kalau semuanya sudah lewat, yang paling akhir.
+ */
+export function pickPlan(plans: Plan[], today: string, id?: string | number | null): Plan | null {
+  if (id) {
+    const p = plans.find((x) => String(x.id) === String(id));
+    if (p) return p;
+  }
+  return activePlans(plans, today)[0] ?? plans[plans.length - 1] ?? null;
 }
 
 export async function getSessions(planId: number): Promise<SessionRow[]> {

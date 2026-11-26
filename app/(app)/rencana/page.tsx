@@ -1,10 +1,12 @@
 import { requireUser } from '@/lib/session';
 import PendingOverlay from '@/components/PendingOverlay';
-import { getPlan, getSessions } from '@/lib/db';
-import { fmtDuration, todayIn } from '@/lib/dates';
+import Link from 'next/link';
+import { MAX_PLANS, getPlans, getSessions, type Plan } from '@/lib/db';
+import { diffDays, fmtDuration, fmtLong, fmtShort, todayIn } from '@/lib/dates';
 import { DAY_NAMES, DEFAULT_DAYS, DISTANCES, MARATHON_KM, distanceFor, riegel } from '@/lib/plan';
 import { estimateFromStrava } from '@/lib/fitness';
-import { savePlan } from './actions';
+import Icon from '@/components/Icon';
+import { deletePlan, savePlan } from './actions';
 
 const TZS = ['Asia/Jakarta', 'Asia/Makassar', 'Asia/Jayapura', 'Asia/Singapore', 'Asia/Kuala_Lumpur'];
 
@@ -12,10 +14,87 @@ const TZS = ['Asia/Jakarta', 'Asia/Makassar', 'Asia/Jayapura', 'Asia/Singapore',
 const fmtTarget = (sec: number, km: number) =>
   km <= 10 && sec < 3600 ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : fmtDuration(sec);
 
-export default async function Rencana({ searchParams }: { searchParams: { error?: string } }) {
+/** Dua rencana bertumpuk kalau rentang mulai–lomba-nya beririsan */
+const overlaps = (a: Plan, b: Plan) => a.id !== b.id && a.start_date <= b.race_date && b.start_date <= a.race_date;
+
+function PlanList({ plans, today, error }: { plans: Plan[]; today: string; error?: string }) {
+  const full = plans.length >= MAX_PLANS;
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-semibold tracking-tight">Rencana</h1>
+          <p className="mt-1 text-sm text-ink/50">Kamu bisa menjalankan beberapa rencana sekaligus, maksimal {MAX_PLANS}.</p>
+        </div>
+        {!full && <Link href="/rencana?baru=1" className="btn">+ Rencana baru</Link>}
+      </div>
+      {error && <p className="rounded-xl border border-bad/20 bg-bad/10 px-4 py-2 text-sm text-bad">{error}</p>}
+      <div className="grid gap-4 md:grid-cols-2">
+        {plans.map((p) => {
+          const dist = distanceFor(p.race_km);
+          const left = diffDays(today, p.race_date);
+          const running = p.start_date <= today && left >= 0;
+          const clash = plans.filter((o) => overlaps(p, o));
+          return (
+            <section key={p.id} className={`card flex flex-col ${left < 0 ? 'opacity-70' : ''}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-track">{dist.label}</p>
+                  <h2 className="mt-0.5 truncate font-display text-lg font-semibold">{p.race_name}</h2>
+                  <p className="text-sm text-ink/50">{fmtLong(p.race_date)}</p>
+                </div>
+                <span className={`chip shrink-0 ${left < 0 ? 'bg-ink/[0.06] text-ink/50' : running ? 'bg-ok/10 text-ok' : 'bg-volt/25 text-warn'}`}>
+                  {left < 0 ? 'Selesai' : running ? `Berjalan · ${left} hari` : `Mulai ${fmtShort(p.start_date)}`}
+                </span>
+              </div>
+              <dl className="mt-4 grid grid-cols-3 gap-3 text-sm">
+                <div><dt className="text-xs text-ink/45">Target</dt><dd className="font-medium">{fmtTarget(p.target_sec, dist.km)}</dd></div>
+                <div><dt className="text-xs text-ink/45">Durasi</dt><dd className="font-medium">{p.total_weeks} minggu</dd></div>
+                <div><dt className="text-xs text-ink/45">Lari/minggu</dt><dd className="font-medium">{p.runs_per_week}x</dd></div>
+              </dl>
+              {clash.length > 0 && left >= 0 && (
+                <p className="mt-3 rounded-xl bg-warn/10 px-3 py-2 text-xs leading-relaxed text-warn">
+                  Bertumpuk dengan {clash.map((c) => c.race_name).join(', ')}. Jadwalnya dihitung terpisah, jadi jaga total volume
+                  mingguan supaya tidak berlebihan.
+                </p>
+              )}
+              <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
+                <Link href={`/dashboard?plan=${p.id}`} className="btn-ghost">Ringkasan</Link>
+                <Link href={`/jadwal?plan=${p.id}`} className="btn-ghost">Jadwal</Link>
+                <Link href={`/rencana?id=${p.id}`} className="btn-ghost">Ubah</Link>
+                <details className="relative ml-auto">
+                  <summary className="cursor-pointer list-none text-xs text-ink/40 hover:text-bad">Hapus</summary>
+                  <form action={deletePlan} className="absolute right-0 z-10 mt-2 w-60 rounded-xl border border-ink/[0.07] bg-card p-3 text-xs shadow-lg">
+                    <PendingOverlay label="Menghapus rencana…" />
+                    <input type="hidden" name="id" value={p.id} />
+                    <p className="text-ink/60">Hapus rencana &amp; semua sesinya? Data lari Strava tidak ikut terhapus.</p>
+                    <button className="mt-2 w-full rounded-full bg-bad px-3 py-1.5 font-medium text-white hover:bg-bad/90">Ya, hapus</button>
+                  </form>
+                </details>
+              </div>
+            </section>
+          );
+        })}
+        {!full && (
+          <Link href="/rencana?baru=1"
+            className="flex min-h-[12rem] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-ink/10 text-sm text-ink/45 transition hover:border-track/40 hover:text-track">
+            <Icon name="flag" className="h-6 w-6" />
+            Tambah rencana untuk lomba lain
+          </Link>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default async function Rencana({ searchParams }: { searchParams: { error?: string; id?: string; baru?: string } }) {
   const user = await requireUser();
-  const plan = await getPlan(user.id);
   const today = todayIn(user.timezone);
+  const plans = await getPlans(user.id);
+  const plan = searchParams.id ? plans.find((p) => String(p.id) === searchParams.id) ?? null : null;
+  // Tanpa ?id / ?baru: tampilkan daftar rencana (atau langsung form kalau belum punya rencana sama sekali)
+  if (!plan && !searchParams.baru && plans.length > 0) return <PlanList plans={plans} today={today} error={searchParams.error} />;
+  if (!plan && plans.length >= MAX_PLANS) return <PlanList plans={plans} today={today} error={`Maksimal ${MAX_PLANS} rencana. Hapus rencana lama dulu.`} />;
   const fit = await estimateFromStrava(user.id, today);
   const dist = distanceFor(plan?.race_km);
   // Perkiraan waktu sekarang di jarak rencana (fit.sec = setara maraton)
@@ -31,7 +110,16 @@ export default async function Rencana({ searchParams }: { searchParams: { error?
     <div className="grid gap-5 lg:grid-cols-3">
       <form action={savePlan} className="card space-y-4 lg:col-span-2">
         <PendingOverlay label="Menyusun jadwal…" />
-        <h1 className="font-display text-xl font-semibold">{plan ? 'Ubah rencana' : 'Buat rencana latihan'}</h1>
+        {plan && <input type="hidden" name="plan_id" value={plan.id} />}
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="font-display text-xl font-semibold">{plan ? `Ubah rencana · ${plan.race_name}` : plans.length ? 'Rencana baru' : 'Buat rencana latihan'}</h1>
+          {plans.length > 0 && <Link href="/rencana" className="text-sm text-ink/50 hover:text-ink">Batal</Link>}
+        </div>
+        {!plan && plans.some((p) => p.race_date >= today) && (
+          <p className="rounded-xl bg-paper px-3 py-2 text-xs text-ink/55">
+            Rencana ini akan berjalan bersamaan dengan rencana lain yang sudah ada. Rencana lama tidak diubah.
+          </p>
+        )}
         {searchParams.error && <p className="rounded-lg border border-bad/30 bg-bad/10 px-3 py-2 text-sm text-bad">{searchParams.error}</p>}
         <div className="grid gap-4 sm:grid-cols-2">
           <label><span className="label">Nama lomba</span>
@@ -118,7 +206,7 @@ export default async function Rencana({ searchParams }: { searchParams: { error?
           </p>
         )}
         <button className="btn">{plan ? 'Simpan & buat ulang jadwal' : 'Buat jadwal'}</button>
-        {plan && <p className="text-xs text-ink/40">Membuat ulang jadwal akan mengganti semua sesi. Data lari Strava tidak terhapus dan akan dicocokkan ulang.</p>}
+        {plan && <p className="text-xs text-ink/40">Membuat ulang jadwal akan mengganti semua sesi rencana ini (rencana lain tidak berubah). Data lari Strava tidak terhapus dan akan dicocokkan ulang.</p>}
       </form>
       <aside className="card space-y-3 text-sm text-ink/70">
         <h2 className="font-display text-lg font-semibold">Cara kerja</h2>

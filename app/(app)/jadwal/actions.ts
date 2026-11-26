@@ -5,8 +5,14 @@ import { db } from '@/lib/db';
 import { requireUser } from '@/lib/session';
 import { addDays, parseClock, todayIn } from '@/lib/dates';
 
-const back = (week: string, msg?: string): never =>
-  redirect(`/jadwal${msg ? `?error=${encodeURIComponent(msg)}` : ''}${week ? `#w${week}` : ''}`);
+/** Kembali ke Jadwal rencana yang sama (?plan=), dengan pesan error dan/atau lompat ke minggu tertentu */
+function backTo(plan: string, week: string, msg?: string): never {
+  const q = new URLSearchParams();
+  if (/^\d+$/.test(plan)) q.set('plan', plan);
+  if (msg) q.set('error', msg);
+  const qs = q.toString();
+  return redirect(`/jadwal${qs ? `?${qs}` : ''}${week ? `#w${week}` : ''}`);
+}
 
 /**
  * Catat lari / strength secara manual. Disimpan sebagai aktivitas biasa (manual = true, id negatif),
@@ -15,6 +21,7 @@ const back = (week: string, msg?: string): never =>
 export async function logManual(f: FormData) {
   const user = await requireUser();
   const str = (k: string) => String(f.get(k) ?? '').trim();
+  const back = (w: string, m?: string) => backTo(str('plan'), w, m);
   const today = todayIn(user.timezone);
   const sessionId = Number(str('session_id'));
   let s: { date: string; type: string; title: string; week: number | null };
@@ -65,7 +72,7 @@ export async function logManual(f: FormData) {
             ${sec ?? 0}, ${hr}, true)`;
   revalidatePath('/jadwal');
   revalidatePath('/dashboard');
-  back(week);
+  backTo(String(f.get('plan') ?? ''), week);
 }
 
 export async function deleteManual(f: FormData) {
@@ -75,5 +82,5 @@ export async function deleteManual(f: FormData) {
   if (/^-\d+$/.test(id)) await db()`delete from activities where id = ${id} and user_id = ${user.id} and manual`;
   revalidatePath('/jadwal');
   revalidatePath('/dashboard');
-  back(week);
+  backTo(String(f.get('plan') ?? ''), week);
 }

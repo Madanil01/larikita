@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import Nav from '@/components/Nav';
 import Logo from '@/components/Logo';
@@ -13,7 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {/* Sidebar desktop */}
       <aside className="sticky top-0 hidden h-screen flex-col border-r border-ink/[0.06] bg-card/60 px-4 py-5 lg:flex">
         <Link href="/dashboard" className="px-2"><Logo /></Link>
-        <div className="mt-8 flex-1"><Nav variant="side" /></div>
+        <div className="mt-8 flex-1"><Suspense><Nav variant="side" /></Suspense></div>
         <div className="rounded-2xl border border-ink/[0.07] bg-card p-3">
           <div className="flex items-center gap-2.5">
             <Avatar name={user.name} src={user.avatar} size={34} />
@@ -51,7 +52,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </main>
       </div>
 
-      <Nav variant="bottom" />
+      <Suspense><Nav variant="bottom" /></Suspense>
     </div>
   );
 }

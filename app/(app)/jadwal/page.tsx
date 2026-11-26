@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import PendingOverlay from '@/components/PendingOverlay';
 import { requireUser } from '@/lib/session';
-import { getManual, getPlan, getRuns, getSessions, getStrength, type ManualActivity } from '@/lib/db';
+import { getManual, getPlans, getRuns, getSessions, getStrength, pickPlan, type ManualActivity } from '@/lib/db';
+import PlanSwitcher from '@/components/PlanSwitcher';
 import { deleteManual, logManual } from './actions';
 import { addDays, dayName, fmtDuration, fmtPace, fmtShort, mondayOf, todayIn } from '@/lib/dates';
 import { matchSessions, type SessionWithStatus } from '@/lib/stats';
@@ -22,11 +23,12 @@ const manualLabel = (m: ManualActivity) =>
     : `Strength${m.moving_time_s ? ` · ${Math.round(m.moving_time_s / 60)} menit` : ''}`) +
   (m.avg_hr ? ` · HR ${Math.round(m.avg_hr)}` : '');
 
-export default async function Jadwal({ searchParams }: { searchParams: { error?: string } }) {
+export default async function Jadwal({ searchParams }: { searchParams: { error?: string; plan?: string } }) {
   const user = await requireUser();
-  const plan = await getPlan(user.id);
-  if (!plan) return <section className="card">Belum ada rencana. <Link className="underline" href="/rencana">Buat rencana</Link></section>;
   const today = todayIn(user.timezone);
+  const plans = await getPlans(user.id);
+  const plan = pickPlan(plans, today, searchParams.plan);
+  if (!plan) return <section className="card">Belum ada rencana. <Link className="underline" href="/rencana?baru=1">Buat rencana</Link></section>;
   const from = addDays(plan.start_date, -2);
   const sessions = await getSessions(plan.id);
   const runs = await getRuns(user.id, from, today);
@@ -52,6 +54,7 @@ export default async function Jadwal({ searchParams }: { searchParams: { error?:
         </div>
         {user.access_token && <SyncButton />}
       </div>
+      <PlanSwitcher plans={plans} current={plan} today={today} basePath="/jadwal" />
       {searchParams.error && (
         <p className="rounded-xl border border-bad/20 bg-bad/10 px-4 py-2 text-sm text-bad">{searchParams.error}</p>
       )}
@@ -65,6 +68,7 @@ export default async function Jadwal({ searchParams }: { searchParams: { error?:
         </summary>
         <form action={logManual} className="mt-4 grid gap-3 sm:grid-cols-3">
           <PendingOverlay label="Menyimpan…" />
+          <input type="hidden" name="plan" value={plan.id} />
           <label><span className="label">Jenis</span>
             <select name="kind" className="input"><option value="run">Lari</option><option value="strength">Strength</option></select></label>
           <label><span className="label">Tanggal</span>
@@ -85,6 +89,7 @@ export default async function Jadwal({ searchParams }: { searchParams: { error?:
             {manual.slice(-10).reverse().map((m) => (
               <form key={m.id} action={deleteManual} className="flex flex-wrap items-center gap-2 py-1 text-xs text-ink/60">
                 <PendingOverlay label="Menghapus…" />
+                <input type="hidden" name="plan" value={plan.id} />
                 <input type="hidden" name="id" value={m.id} />
                 <input type="hidden" name="week" value="" />
                 <span className="w-20 text-ink/50">{dayName(m.local_date)} {fmtShort(m.local_date)}</span>
@@ -122,6 +127,7 @@ export default async function Jadwal({ searchParams }: { searchParams: { error?:
                     {firstOfDate.has(s.id) && manualByDate.get(s.date)?.map((m) => (
                       <form key={m.id} action={deleteManual} className="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink/60">
                         <PendingOverlay label="Menghapus…" />
+                        <input type="hidden" name="plan" value={plan.id} />
                         <input type="hidden" name="id" value={m.id} />
                         <input type="hidden" name="week" value={w} />
                         <span className="rounded-full bg-ink/[0.06] px-2 py-0.5 text-[10px] font-medium">manual</span>
@@ -137,6 +143,7 @@ export default async function Jadwal({ searchParams }: { searchParams: { error?:
                         </summary>
                         <form action={logManual} className="mt-2 grid max-w-md grid-cols-2 gap-2 rounded-xl border border-ink/[0.07] bg-paper/60 p-3 sm:grid-cols-4">
                           <PendingOverlay label="Menyimpan…" />
+                          <input type="hidden" name="plan" value={plan.id} />
                           <input type="hidden" name="session_id" value={s.id} />
                           <label className="col-span-2 sm:col-span-1"><span className="label">Tanggal</span>
                             <input name="date" type="date" defaultValue={s.date} max={today} className="input px-2 py-1" /></label>

@@ -33,7 +33,7 @@ create unique index if not exists users_email_key on users (lower(email));
 
 create table if not exists plans (
   id                  serial primary key,
-  user_id             integer unique not null references users(id) on delete cascade,
+  user_id             integer not null references users(id) on delete cascade,
   race_name           text not null,
   race_date           date not null,
   race_km             real not null default 42.195,
@@ -55,6 +55,9 @@ alter table plans add column if not exists strength_per_week integer not null de
 -- Migrasi: mode push (pace dipercepat X%)
 alter table plans add column if not exists push_pct integer not null default 0;
 alter table plans add column if not exists push_all boolean not null default false;
+-- Migrasi: boleh lebih dari satu rencana per user (mis. 10K bulan Maret dan HM bulan Mei)
+alter table plans drop constraint if exists plans_user_id_key;
+create index if not exists plans_user on plans(user_id, race_date);
 
 create table if not exists sessions (
   id            serial primary key,

@@ -28,7 +28,10 @@ export default function AnalysisCard({ dateLabel, initial }: { dateLabel: string
         </button>
       </div>
       <div className="mt-3 max-w-3xl space-y-1.5 text-sm leading-relaxed text-ink/80">
-        {body ? body.split('\n').map((l, i) => <p key={i}>{l}</p>)
+        {body ? body.split('\n').map((l, i) => l.startsWith('## ')
+          // subjudul per rencana (kalau ada lebih dari satu rencana aktif)
+          ? <p key={i} className={`font-display font-semibold text-ink ${i ? 'pt-3' : ''}`}>{l.slice(3)}</p>
+          : <p key={i}>{l}</p>)
           : <p className="text-ink/50">Belum ada catatan. Klik “Buat analisis” untuk menilai latihanmu hari ini dibanding rencana, berdasarkan data Strava.</p>}
         {err && <p className="text-bad">{err}</p>}
       </div>
