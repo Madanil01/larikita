@@ -3,10 +3,12 @@ import PendingOverlay from '@/components/PendingOverlay';
 import Link from 'next/link';
 import { MAX_PLANS, db, getPlans, getSessions, type Plan } from '@/lib/db';
 import { addDays, diffDays, fmtDuration, fmtLong, fmtShort, todayIn } from '@/lib/dates';
-import { DAY_NAMES, DEFAULT_DAYS, DISTANCES, MARATHON_KM, distanceFor, riegel } from '@/lib/plan';
+import { DAY_NAMES, DEFAULT_DAYS, DISTANCES, MARATHON_KM, distanceFor, planRisk, riegel, type Risk } from '@/lib/plan';
 import { estimateFromStrava } from '@/lib/fitness';
 import Icon from '@/components/Icon';
 import RegenConfirm from '@/components/RegenConfirm';
+import WeeksRiskPreview from '@/components/WeeksRiskPreview';
+import { RiskBadge, RiskPanel } from '@/components/Risk';
 import { deletePlan, savePlan } from './actions';
 
 const TZS = ['Asia/Jakarta', 'Asia/Makassar', 'Asia/Jayapura', 'Asia/Singapore', 'Asia/Kuala_Lumpur'];
@@ -18,7 +20,7 @@ const fmtTarget = (sec: number, km: number) =>
 /** Dua rencana bertumpuk kalau rentang mulai–lomba-nya beririsan */
 const overlaps = (a: Plan, b: Plan) => a.id !== b.id && a.start_date <= b.race_date && b.start_date <= a.race_date;
 
-function PlanList({ plans, today, error }: { plans: Plan[]; today: string; error?: string }) {
+function PlanList({ plans, today, risks, error }: { plans: Plan[]; today: string; risks: Record<number, Risk>; error?: string }) {
   const full = plans.length >= MAX_PLANS;
   return (
     <div className="space-y-5">
@@ -53,6 +55,12 @@ function PlanList({ plans, today, error }: { plans: Plan[]; today: string; error
                 <div><dt className="text-xs text-ink/45">Durasi</dt><dd className="font-medium">{p.total_weeks} minggu</dd></div>
                 <div><dt className="text-xs text-ink/45">Lari/minggu</dt><dd className="font-medium">{p.runs_per_week}x</dd></div>
               </dl>
+              {left >= 0 && risks[p.id] && (
+                <p className="mt-3 flex items-start gap-2 text-xs text-ink/55">
+                  <RiskBadge level={risks[p.id].level} />
+                  <span className="line-clamp-2">{risks[p.id].reasons[0] ?? 'Lama program, target, dan volume dalam batas wajar.'}</span>
+                </p>
+              )}
               {clash.length > 0 && left >= 0 && (
                 <p className="mt-3 rounded-xl bg-warn/10 px-3 py-2 text-xs leading-relaxed text-warn">
                   Bertumpuk dengan {clash.map((c) => c.race_name).join(', ')}. Jadwalnya dihitung terpisah, jadi jaga total volume
@@ -93,18 +101,28 @@ export default async function Rencana({ searchParams }: { searchParams: { error?
   const today = todayIn(user.timezone);
   const plans = await getPlans(user.id);
   const plan = searchParams.id ? plans.find((p) => String(p.id) === searchParams.id) ?? null : null;
-  // Tanpa ?id / ?baru: tampilkan daftar rencana (atau langsung form kalau belum punya rencana sama sekali)
-  if (!plan && !searchParams.baru && plans.length > 0) return <PlanList plans={plans} today={today} error={searchParams.error} />;
-  if (!plan && plans.length >= MAX_PLANS) return <PlanList plans={plans} today={today} error={`Maksimal ${MAX_PLANS} rencana. Hapus rencana lama dulu.`} />;
   const fit = await estimateFromStrava(user.id, today);
+  // Tingkat risiko tiap rencana (lama program, target vs kemampuan, push, long run terpanjang)
+  const longs = await db()<{ plan_id: number; km: number }[]>`
+    select plan_id, coalesce(max(distance_km) filter (where type = 'long'), 0)::real as km from sessions
+    where plan_id in (select id from plans where user_id = ${user.id}) group by plan_id`;
+  const risks: Record<number, Risk> = {};
+  for (const p of plans) {
+    risks[p.id] = planRisk({
+      raceKm: p.race_km, weeks: p.total_weeks, targetSec: p.target_sec,
+      fitSec: fit ? riegel(fit.sec, MARATHON_KM, distanceFor(p.race_km).km) : null,
+      pushPct: p.push_pct, pushAll: p.push_all, longestLongKm: longs.find((l) => l.plan_id === p.id)?.km ?? null,
+    });
+  }
+  // Tanpa ?id / ?baru: tampilkan daftar rencana (atau langsung form kalau belum punya rencana sama sekali)
+  if (!plan && !searchParams.baru && plans.length > 0) return <PlanList plans={plans} today={today} risks={risks} />;
+  if (!plan && plans.length >= MAX_PLANS) return <PlanList plans={plans} today={today} risks={risks} error={`Maksimal ${MAX_PLANS} rencana. Hapus rencana lama dulu.`} />;
   const dist = distanceFor(plan?.race_km);
   // Perkiraan waktu sekarang di jarak rencana (fit.sec = setara maraton)
   const runDays = plan?.run_days ? plan.run_days.split(',').map(Number) : DEFAULT_DAYS[plan?.runs_per_week ?? 4] ?? DEFAULT_DAYS[4];
   const longDay = plan?.long_day ?? runDays[runDays.length - 1];
   const fitAtDist = fit ?Math.round(riegel(fit.sec, MARATHON_KM, dist.km)) : null;
-  // Long run terpanjang di rencana (di luar lomba & tes) untuk cek kesiapan
   const planSessions = plan ? await getSessions(plan.id) : [];
-  const longest = Math.max(0, ...planSessions.filter((s) => s.type === 'long').map((s) => s.distance_km));
   // Untuk popup konfirmasi: sesi yang diubah manual (akan ditimpa) dan catatan lari manual di masa rencana ini
   const edited = planSessions.filter((s) => s.edited).length;
   const manualLogs = plan
@@ -126,8 +144,6 @@ export default async function Rencana({ searchParams }: { searchParams: { error?
             Rencana ini akan berjalan bersamaan dengan rencana lain yang sudah ada. Rencana lama tidak diubah.
           </p>
         )}
-        {searchParams.error && <p className="rounded-lg border border-bad/30 bg-bad/10 px-3 py-2 text-sm text-bad">{searchParams.error}</p>}
-        {searchParams.ok && <p className="rounded-xl border border-ok/20 bg-ok/10 px-3 py-2 text-sm text-ok">Detail rencana disimpan. Jadwal tidak diubah.</p>}
         <div className="grid gap-4 sm:grid-cols-2">
           <label><span className="label">Nama lomba</span>
             <input name="race_name" required className="input" defaultValue={plan?.race_name ?? ''} placeholder="Jakarta Running Festival" /></label>
@@ -144,6 +160,7 @@ export default async function Rencana({ searchParams }: { searchParams: { error?
             <input name="goal_title" className="input" defaultValue={plan?.goal_title ?? ''} placeholder="10K pertama, target sub-60" /></label>
           <label><span className="label">Mulai program</span>
             <input name="start_date" type="date" className="input" defaultValue={today} /></label>
+          <WeeksRiskPreview />
           <fieldset className="sm:col-span-2">
             <legend className="label">Hari lari (pilih 3-6)</legend>
             <div className="flex flex-wrap gap-2">
@@ -198,20 +215,9 @@ export default async function Rencana({ searchParams }: { searchParams: { error?
           <p className="text-xs text-ink/50">
             Perkiraan kemampuanmu sekarang dari Strava: {dist.label} ≈{' '}
             <b className="text-ink">{fmtTarget(fitAtDist, dist.km)}</b> (dari {fit.source}).
-            {plan && plan.target_sec < fitAtDist * 0.9 && (
-              <span className="mt-1 block text-warn">
-                Target {fmtTarget(plan.target_sec, dist.km)} itu {Math.round((1 - plan.target_sec / fitAtDist) * 100)}% lebih cepat dari
-                kemampuanmu sekarang. Itu ambisius; pertimbangkan target yang lebih longgar.
-              </span>
-            )}
           </p>
         )}
-        {plan && dist.longReadyKm > 0 && longest < dist.longReadyKm && (
-          <p className="rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-warn">
-            Long run terpanjang di rencanamu cuma {longest} km. Untuk {dist.label} idealnya minimal ±{dist.longReadyKm} km. Waktunya
-            terlalu mepet untuk volume sekarang: pertimbangkan lomba yang lebih jauh tanggalnya atau jarak yang lebih pendek dulu.
-          </p>
-        )}
+        {plan && risks[plan.id] && <RiskPanel risk={risks[plan.id]} />}
         {plan ? <RegenConfirm edited={edited} manualLogs={manualLogs} /> : <button className="btn">Buat jadwal</button>}
         {plan && edited > 0 && (
           <p className="text-xs text-info">{edited} sesi di rencana ini sudah kamu ubah manual di Jadwal (bertanda “diubah”).</p>

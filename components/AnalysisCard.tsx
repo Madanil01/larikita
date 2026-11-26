@@ -1,19 +1,18 @@
 'use client';
 import { useState } from 'react';
 import Icon from './Icon';
+import { toast } from './Toaster';
 
 export default function AnalysisCard({ dateLabel, initial }: { dateLabel: string; initial: string | null }) {
   const [body, setBody] = useState(initial);
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState('');
   async function run() {
     setBusy(true);
-    setErr('');
     const res = await fetch('/api/analysis', { method: 'POST' });
     const j = await res.json().catch(() => ({}));
     setBusy(false);
-    if (!res.ok) setErr(j.error || 'Gagal membuat analisis');
-    else setBody(j.body);
+    if (!res.ok) toast(j.error || 'Gagal membuat analisis.', 'error');
+    else { setBody(j.body); toast('Analisis hari ini diperbarui.'); }
   }
   return (
     <section className="card border-l-4 border-l-volt">
@@ -33,7 +32,6 @@ export default function AnalysisCard({ dateLabel, initial }: { dateLabel: string
           ? <p key={i} className={`font-display font-semibold text-ink ${i ? 'pt-3' : ''}`}>{l.slice(3)}</p>
           : <p key={i}>{l}</p>)
           : <p className="text-ink/50">Belum ada catatan. Klik “Buat analisis” untuk menilai latihanmu hari ini dibanding rencana, berdasarkan data Strava.</p>}
-        {err && <p className="text-bad">{err}</p>}
       </div>
     </section>
   );

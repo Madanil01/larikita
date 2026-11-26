@@ -30,6 +30,13 @@ body {
 .overlay-in { opacity: 0; animation: overlay-in 0.2s ease-out 0.15s forwards; }
 @media (prefers-reduced-motion: reduce) { .overlay-in { animation-duration: 0s; } }
 
+/* Toast: meluncur masuk dari kanan, keluar ke kanan */
+@keyframes toast-in { from { opacity: 0; transform: translateX(24px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { to { opacity: 0; transform: translateX(24px); } }
+.toast-in { animation: toast-in 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+.toast-out { animation: toast-out 0.22s ease-in forwards; }
+@media (prefers-reduced-motion: reduce) { .toast-in, .toast-out { animation-duration: 0s; } }
+
 @layer components {
   .card { @apply rounded-2xl border border-ink/[0.07] bg-card p-5 shadow-[0_1px_2px_rgb(var(--ink)/0.04)]; }
   .muted { @apply text-sm text-ink/55; }

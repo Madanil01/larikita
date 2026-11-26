@@ -2,20 +2,19 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import Icon from './Icon';
+import { toast } from './Toaster';
 
 export default function SyncButton() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState('');
   async function run() {
     setBusy(true);
-    setMsg('');
     const res = await fetch('/api/sync', { method: 'POST' });
     const j = await res.json().catch(() => ({}));
     setBusy(false);
-    if (!res.ok) setMsg(j.error || 'Gagal sinkron');
+    if (!res.ok) toast(j.error || 'Gagal sinkron dengan Strava.', 'error');
     else {
-      setMsg(j.count ? `${j.count} aktivitas diperbarui` : 'Sudah terbaru');
+      toast(j.count ? `${j.count} aktivitas diperbarui dari Strava.` : 'Data Strava sudah yang terbaru.');
       router.refresh();
     }
   }
@@ -25,7 +24,6 @@ export default function SyncButton() {
         <Icon name="refresh" className={`h-3.5 w-3.5 ${busy ? 'animate-spin' : ''}`} />
         {busy ? 'Memuat…' : 'Muat ulang'}
       </button>
-      {msg && <span className="text-xs text-ink/50">{msg}</span>}
     </span>
   );
 }

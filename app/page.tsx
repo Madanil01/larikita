@@ -64,9 +64,6 @@ export default async function Home({ searchParams }: { searchParams: { error?: s
           <Link href="/?mode=daftar" aria-current={daftar ? 'page' : undefined}
             className={`rounded-full py-1.5 text-center transition ${daftar ? 'bg-card shadow-sm' : 'text-ink/50 hover:text-ink'}`}>Daftar</Link>
         </div>
-        {searchParams.error && (
-          <p className="mt-4 rounded-xl bg-bad/10 px-3 py-2 text-sm text-bad">{searchParams.error}</p>
-        )}
         <form action={daftar ? register : login} className="mt-5 space-y-3.5">
           <PendingOverlay label={daftar ? 'Membuat akun…' : 'Masuk…'} />
           {daftar && (

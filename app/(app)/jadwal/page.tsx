@@ -57,9 +57,6 @@ export default async function Jadwal({ searchParams }: { searchParams: { error?:
         {user.access_token && <SyncButton />}
       </div>
       <PlanSwitcher plans={plans} current={plan} today={today} basePath="/jadwal" />
-      {searchParams.error && (
-        <p className="rounded-xl border border-bad/20 bg-bad/10 px-4 py-2 text-sm text-bad">{searchParams.error}</p>
-      )}
       <details className="card" open={!!searchParams.error}>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
           <span>

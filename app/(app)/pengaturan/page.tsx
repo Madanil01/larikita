@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { requireUser } from '@/lib/session';
 import PendingOverlay from '@/components/PendingOverlay';
 import { appUrl, stravaCreds, webhookUrl } from '@/lib/strava';
@@ -15,13 +16,10 @@ export default async function Pengaturan({ searchParams }: { searchParams: { ok?
 
   return (
     <div className="max-w-3xl space-y-5">
-      <h1 className="font-display text-3xl font-semibold tracking-tight">Pengaturan</h1>
-      {searchParams.ok && (
-        <p className="rounded-xl border border-ok/20 bg-ok/10 px-4 py-2 text-sm text-ok">{searchParams.ok}</p>
-      )}
-      {searchParams.error && (
-        <p className="rounded-xl border border-bad/20 bg-bad/10 px-4 py-2 text-sm text-bad">{searchParams.error}</p>
-      )}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <h1 className="font-display text-3xl font-semibold tracking-tight">Pengaturan</h1>
+        <Link href="/panduan#strava" className="btn-ghost">Panduan menghubungkan Strava</Link>
+      </div>
 
       <section className="card space-y-2">
         <h2 className="font-display text-lg font-semibold">Akun</h2>

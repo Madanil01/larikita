@@ -20,7 +20,8 @@ export interface DistanceConfig {
   label: string; // label lengkap
   short: string; // dipakai di judul sesi, mis. "pace 10K"
   defaultTarget: string;
-  minWeeks: number;
+  minWeeks: number; // di bawah ini: risiko tinggi (bukan lagi larangan)
+  idealWeeks: number; // lama program yang umum disarankan
   peakFactor: number; // pengali volume puncak dibanding program maraton
   longCap: [number, number]; // batas long run km: [fase Base, fase berikutnya]
   longHours: number; // batas durasi long run
@@ -32,22 +33,22 @@ export interface DistanceConfig {
 
 export const DISTANCES: DistanceConfig[] = [
   {
-    km: 5, label: '5K', short: '5K', defaultTarget: '0:30:00', minWeeks: 4, peakFactor: 0.6,
+    km: 5, label: '5K', short: '5K', defaultTarget: '0:30:00', minWeeks: 4, idealWeeks: 8, peakFactor: 0.6,
     longCap: [10, 14], longHours: 1.5, raceWeekFactor: 0.55,
     specific: { title: 'Repetisi pace 5K (5-6x1 km)', notes: 'Jogging 2 menit antar repetisi.' }, longRpMaxKm: 0, longReadyKm: 0,
   },
   {
-    km: 10, label: '10K', short: '10K', defaultTarget: '1:00:00', minWeeks: 6, peakFactor: 0.7,
+    km: 10, label: '10K', short: '10K', defaultTarget: '1:00:00', minWeeks: 6, idealWeeks: 10, peakFactor: 0.7,
     longCap: [14, 18], longHours: 1.75, raceWeekFactor: 0.5,
     specific: { title: 'Repetisi pace 10K (3x3 km)', notes: 'Jogging 3 menit antar repetisi.' }, longRpMaxKm: 0, longReadyKm: 0,
   },
   {
-    km: 21.0975, label: 'Half Marathon (21K)', short: 'HM', defaultTarget: '2:15:00', minWeeks: 8, peakFactor: 0.85,
+    km: 21.0975, label: 'Half Marathon (21K)', short: 'HM', defaultTarget: '2:15:00', minWeeks: 8, idealWeeks: 12, peakFactor: 0.85,
     longCap: [18, 22], longHours: 2.25, raceWeekFactor: 0.4,
     specific: { title: 'Lari pace HM (2x5 km)', notes: 'Jogging 3 menit di antaranya.' }, longRpMaxKm: 6, longReadyKm: 15,
   },
   {
-    km: MARATHON_KM, label: 'Full Marathon (42K)', short: 'maraton', defaultTarget: '4:30:00', minWeeks: 10, peakFactor: 1,
+    km: MARATHON_KM, label: 'Full Marathon (42K)', short: 'maraton', defaultTarget: '4:30:00', minWeeks: 10, idealWeeks: 16, peakFactor: 1,
     longCap: [24, 32], longHours: 3, raceWeekFactor: 0.3,
     specific: { title: 'Lari pace maraton', notes: 'Bagian tengah di pace maraton.' }, longRpMaxKm: 14, longReadyKm: 28,
   },
@@ -210,8 +211,9 @@ export function validateInput(inp: PlanInput): string | null {
   const d = distanceFor(inp.raceKm);
   const weeks = Math.floor(diffDays(mondayOf(inp.startDate), mondayOf(inp.raceDate)) / 7) + 1;
   if (!inp.raceName.trim()) return 'Nama lomba wajib diisi.';
-  if (weeks < d.minWeeks) return `Untuk ${d.label}, jarak ke hari lomba minimal ${d.minWeeks} minggu.`;
-  if (weeks > 52) return 'Program maksimal 52 minggu. Pilih tanggal mulai yang lebih dekat.';
+  // Lama program tidak dibatasi (risikonya ditampilkan lewat planRisk); hanya cek yang jelas salah
+  if (inp.raceDate < inp.startDate) return 'Tanggal lomba harus setelah tanggal mulai program.';
+  if (weeks > 156) return 'Tanggal lomba lebih dari 3 tahun lagi. Cek lagi tahunnya.';
   const pace = inp.targetSec / d.km;
   if (pace < 150 || pace > 720) return `Target ${fmtDuration(inp.targetSec)} untuk ${d.label} = ${fmtPace(pace)}. Pace harus antara 2:30 dan 12:00 /km.`;
   if (inp.runDays.length < 3 || inp.runDays.length > 6) return 'Pilih 3-6 hari lari per minggu.';
@@ -246,6 +248,7 @@ export function generatePlan(inp: PlanInput): GeneratedPlan {
   for (let i = 0; i < totalWeeks; i++) {
     phases.push(i < baseW ? 'Base' : i < baseW + buildW ? 'Build' : i < baseW + buildW + specW ? 'Spesifik' : 'Taper');
   }
+  phases[totalWeeks - 1] = 'Taper'; // minggu lomba selalu taper, juga untuk program yang sangat pendek
 
   // ---- Pace: mulai dari kemampuan sekarang, naik bertahap ke target sampai akhir fase Build ----
   // Pace easy/long selalu relatif ke kemampuan minggu itu, bukan ke target akhir.
@@ -398,4 +401,49 @@ export function generatePlan(inp: PlanInput): GeneratedPlan {
   // urut per tanggal; di hari yang sama lari dulu baru strength
   sessions.sort((a, b) => a.date.localeCompare(b.date) || Number(a.type === 'strength') - Number(b.type === 'strength'));
   return { totalWeeks, startMonday, peakWeeklyKm: peak, weeklyKm, phases, sessions };
+}
+
+// ---- Tingkat risiko rencana ----
+export type RiskLevel = 0 | 1 | 2 | 3;
+export const RISK_LABEL = ['Rendah', 'Sedang', 'Tinggi', 'Sangat tinggi'] as const;
+export interface Risk { level: RiskLevel; reasons: string[] }
+
+export const programWeeks = (startDate: string, raceDate: string) =>
+  Math.floor(diffDays(mondayOf(startDate), mondayOf(raceDate)) / 7) + 1;
+
+/** Risiko dari lama program saja (dipakai juga untuk pratinjau langsung di form) */
+export function weeksRisk(raceKm: number, weeks: number): { level: RiskLevel; reason: string | null } {
+  const d = distanceFor(raceKm);
+  const name = d.label.replace(/ \(.*\)/, '');
+  if (weeks < Math.ceil(d.minWeeks / 2)) return { level: 3, reason: `Hanya ${weeks} minggu untuk ${name}. Minimal aman ±${d.minWeeks} minggu, idealnya ${d.idealWeeks}. Volume harus naik terlalu cepat: risiko cedera besar dan target kemungkinan tidak tercapai.` };
+  if (weeks < d.minWeeks) return { level: 2, reason: `${weeks} minggu masih di bawah minimal ${d.minWeeks} minggu untuk ${name}. Fase dasar sangat pendek; turunkan target atau anggap lomba ini sebagai latihan.` };
+  if (weeks < d.idealWeeks) return { level: 1, reason: `${weeks} minggu sedikit lebih singkat dari ideal (${d.idealWeeks} minggu) untuk ${name}. Masih bisa, asal tidak memaksa.` };
+  if (weeks > 40) return { level: 1, reason: `Program sangat panjang (${weeks} minggu). Rawan jenuh; pertimbangkan mulai lebih dekat ke lomba atau ambil lomba antara.` };
+  return { level: 0, reason: null };
+}
+
+/** Gabungan risiko: lama program, target vs kemampuan sekarang, push, dan long run terpanjang */
+export function planRisk(p: {
+  raceKm: number; weeks: number; targetSec: number; fitSec?: number | null; pushPct?: number; pushAll?: boolean; longestLongKm?: number | null;
+}): Risk {
+  const d = distanceFor(p.raceKm);
+  const out: [RiskLevel, string][] = [];
+  const w = weeksRisk(p.raceKm, p.weeks);
+  if (w.reason) out.push([w.level, w.reason]);
+  if (p.fitSec) {
+    const gap = 1 - p.targetSec / p.fitSec;
+    const pct = Math.round(gap * 100);
+    if (gap > 0.15) out.push([3, `Target ${pct}% lebih cepat dari kemampuanmu sekarang. Lonjakan sebesar itu jarang tercapai dalam satu program.`]);
+    else if (gap > 0.1) out.push([2, `Target ${pct}% lebih cepat dari kemampuanmu sekarang. Ambisius; siapkan target cadangan.`]);
+    else if (gap > 0.05) out.push([1, `Target ${pct}% lebih cepat dari kemampuanmu sekarang. Menantang tapi masuk akal.`]);
+  }
+  const push = p.pushPct ?? 0;
+  if (push > 0 && (p.pushAll || push > 10)) {
+    out.push([p.pushAll ? 2 : 1, `Push ${push}%${p.pushAll ? ' termasuk easy & long run, jadi waktu pemulihan berkurang.' : ' pada sesi kualitas cukup berat.'}`]);
+  }
+  if (p.longestLongKm != null && d.longReadyKm > 0 && p.longestLongKm < d.longReadyKm) {
+    out.push([2, `Long run terpanjang hanya ${p.longestLongKm} km; untuk ${d.label} idealnya minimal ±${d.longReadyKm} km.`]);
+  }
+  const level = out.reduce<RiskLevel>((m, [l]) => (l > m ? l : m), 0);
+  return { level, reasons: out.sort((a, b) => b[0] - a[0]).map(([, r]) => r) };
 }

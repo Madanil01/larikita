@@ -93,6 +93,7 @@ export default async function ConnectedAccounts({ user, className = '' }: { user
             <Link href="/pengaturan" className="btn mt-3 w-full">
               <Icon name="link" className="h-4 w-4" /> Hubungkan Strava
             </Link>
+            <Link href="/panduan#strava" className="mt-2 block text-center text-xs text-ink/50 hover:text-track">Lihat panduan langkah demi langkah</Link>
           </>
         )}
       </div>

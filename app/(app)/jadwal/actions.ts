@@ -7,10 +7,11 @@ import { addDays, diffDays, mondayOf, parseClock, todayIn } from '@/lib/dates';
 import { SESSION_TYPES, type SessionType } from '@/lib/plan';
 
 /** Kembali ke Jadwal rencana yang sama (?plan=), dengan pesan error dan/atau lompat ke minggu tertentu */
-function backTo(plan: string, week: string, msg?: string): never {
+function backTo(plan: string, week: string, msg?: string, ok?: string): never {
   const q = new URLSearchParams();
   if (/^\d+$/.test(plan)) q.set('plan', plan);
   if (msg) q.set('error', msg);
+  if (ok) q.set('ok', ok);
   const qs = q.toString();
   return redirect(`/jadwal${qs ? `?${qs}` : ''}${week ? `#w${week}` : ''}`);
 }
@@ -73,7 +74,7 @@ export async function logManual(f: FormData) {
             ${sec ?? 0}, ${hr}, true)`;
   revalidatePath('/jadwal');
   revalidatePath('/dashboard');
-  backTo(String(f.get('plan') ?? ''), week);
+  backTo(String(f.get('plan') ?? ''), week, undefined, strength ? 'Strength tercatat.' : 'Lari tercatat dan dicocokkan ke jadwal.');
 }
 
 export async function deleteManual(f: FormData) {
@@ -83,7 +84,7 @@ export async function deleteManual(f: FormData) {
   if (/^-\d+$/.test(id)) await db()`delete from activities where id = ${id} and user_id = ${user.id} and manual`;
   revalidatePath('/jadwal');
   revalidatePath('/dashboard');
-  backTo(String(f.get('plan') ?? ''), week);
+  backTo(String(f.get('plan') ?? ''), week, undefined, 'Catatan manual dihapus.');
 }
 
 
@@ -135,7 +136,7 @@ export async function saveSession(f: FormData) {
   }
   revalidatePath('/jadwal');
   revalidatePath('/dashboard');
-  back(String(week));
+  backTo(str('plan'), String(week), undefined, sessionId ? 'Sesi disimpan.' : 'Sesi ditambahkan.');
 }
 
 export async function deleteSession(f: FormData) {
@@ -147,5 +148,5 @@ export async function deleteSession(f: FormData) {
   }
   revalidatePath('/jadwal');
   revalidatePath('/dashboard');
-  backTo(String(f.get('plan') ?? ''), String(f.get('week') ?? ''));
+  backTo(String(f.get('plan') ?? ''), String(f.get('week') ?? ''), undefined, 'Sesi dihapus.');
 }

@@ -9,6 +9,7 @@ const TABS = [
   { href: '/jadwal', label: 'Jadwal', icon: 'calendar', keepPlan: true },
   { href: '/rencana', label: 'Rencana', icon: 'flag' },
   { href: '/pengaturan', label: 'Pengaturan', icon: 'settings' },
+  { href: '/panduan', label: 'Panduan', icon: 'book' },
 ];
 
 /** Desktop: daftar vertikal di sidebar. Mobile: tab bar menempel di bawah layar. */
@@ -19,7 +20,7 @@ export default function Nav({ variant }: { variant: 'side' | 'bottom' }) {
   if (variant === 'bottom') {
     return (
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-ink/[0.07] bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-4">
+        <div className="mx-auto grid max-w-lg grid-cols-5">
           {TABS.map((t) => {
             const on = path.startsWith(t.href);
             return (

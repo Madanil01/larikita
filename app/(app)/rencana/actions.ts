@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { MAX_PLANS, db } from '@/lib/db';
 import { getUser } from '@/lib/session';
-import { distanceFor, generatePlan, validateInput, type PlanInput } from '@/lib/plan';
+import { MARATHON_KM, RISK_LABEL, distanceFor, generatePlan, planRisk, riegel, validateInput, type PlanInput } from '@/lib/plan';
 import { parseDuration, todayIn } from '@/lib/dates';
 import { estimateFromStrava, predictMarathon } from '@/lib/fitness';
 
@@ -43,7 +43,7 @@ export async function savePlan(form: FormData) {
     });
     revalidatePath('/dashboard');
     revalidatePath('/jadwal');
-    redirect(`/rencana?id=${planId}&ok=1`);
+    redirect(`/rencana?id=${planId}&ok=${encodeURIComponent("Detail rencana disimpan. Jadwal tidak diubah.")}`);
   }
 
   const dist = distanceFor(Number(str('race_km')));
@@ -93,6 +93,14 @@ export async function savePlan(form: FormData) {
     strength_per_week: input.strengthPerWeek, push_pct: input.pushPct ?? 0, push_all: input.pushAll ?? false,
     current_weekly_km: input.currentWeeklyKm, peak_weekly_km: g.peakWeeklyKm, total_weeks: g.totalWeeks,
   };
+  // Tidak ada lagi batas minggu: risikonya disampaikan lewat toast setelah simpan (dan di halaman Rencana)
+  const risk = planRisk({
+    raceKm: dist.km, weeks: g.totalWeeks, targetSec,
+    fitSec: fitnessSec ? riegel(fitnessSec, MARATHON_KM, dist.km) : null,
+    pushPct: input.pushPct, pushAll: input.pushAll,
+    longestLongKm: Math.max(0, ...g.sessions.filter((s) => s.type === 'long').map((s) => s.distanceKm)),
+  });
+  const riskNote = risk.level >= 2 ? ` Risiko ${RISK_LABEL[risk.level].toLowerCase()}: ${risk.reasons[0]}` : '';
   let id = planId;
   await db().begin(async (tx) => {
     await tx`update users set timezone = ${tz} where id = ${user.id}`;
@@ -110,7 +118,7 @@ export async function savePlan(form: FormData) {
     }));
     await tx`insert into sessions ${tx(rows)}`;
   });
-  redirect(`/dashboard?plan=${id}`);
+  redirect(`/dashboard?plan=${id}&ok=${encodeURIComponent((planId ? 'Rencana diperbarui, jadwal disusun ulang.' : 'Rencana dibuat. Selamat berlatih!') + riskNote)}`);
 }
 
 export async function deletePlan(form: FormData) {
@@ -120,5 +128,5 @@ export async function deletePlan(form: FormData) {
   if (/^\d+$/.test(id)) await db()`delete from plans where id = ${Number(id)} and user_id = ${user.id}`; // sesi ikut terhapus (cascade)
   revalidatePath('/dashboard');
   revalidatePath('/jadwal');
-  redirect('/rencana');
+  redirect('/rencana?ok=' + encodeURIComponent('Rencana dihapus.'));
 }
