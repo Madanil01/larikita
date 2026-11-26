@@ -3,6 +3,7 @@ import PendingOverlay from '@/components/PendingOverlay';
 import { requireUser } from '@/lib/session';
 import { getManual, getPlans, getRuns, getSessions, getStrength, pickPlan, type ManualActivity } from '@/lib/db';
 import PlanSwitcher from '@/components/PlanSwitcher';
+import SessionEditor from '@/components/SessionEditor';
 import { deleteManual, logManual } from './actions';
 import { addDays, dayName, fmtDuration, fmtPace, fmtShort, mondayOf, todayIn } from '@/lib/dates';
 import { matchSessions, type SessionWithStatus } from '@/lib/stats';
@@ -36,6 +37,7 @@ export default async function Jadwal({ searchParams }: { searchParams: { error?:
   const weeks = new Map<number, SessionWithStatus[]>();
   list.forEach((s) => weeks.set(s.week, [...(weeks.get(s.week) || []), s]));
   const thisMonday = mondayOf(today);
+  const minDate = addDays(plan.start_date, -7); // batas tanggal sesi manual (sama dengan validasi di saveSession)
 
   // Catatan manual ditampilkan sekali per tanggal, di sesi pertama tanggal itu
   const manual = await getManual(user.id, addDays(today, -90), today);
@@ -121,6 +123,7 @@ export default async function Jadwal({ searchParams }: { searchParams: { error?:
                   <div>
                     <span className={`mr-2 rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${TYPE_COLOR[s.type] || ''}`}>{s.type}</span>
                     {s.title}{s.type !== 'strength' && <> · {s.distance_km} km</>}
+                    {s.edited && <span className="chip ml-2 bg-info/10 text-info" title="Diubah manual. Tertimpa kalau rencana dibuat ulang.">diubah</span>}
                     {s.pace_sec ? <span className="text-ink/50"> · {s.target_sec ? `target ${fmtDuration(s.target_sec)}` : fmtPace(s.pace_sec)}</span> : null}
                     {s.notes && <p className="text-xs text-ink/40">{s.notes}</p>}
 
@@ -136,8 +139,11 @@ export default async function Jadwal({ searchParams }: { searchParams: { error?:
                       </form>
                     ))}
 
+                    <div className="mt-1 flex flex-wrap items-start gap-2">
+                    <SessionEditor planId={plan.id} week={w} session={s} minDate={minDate} maxDate={plan.race_date}
+                      trigger={<span className="btn-ghost">Ubah</span>} />
                     {s.date <= today && s.status !== 'done' && (
-                      <details className="mt-1">
+                      <details>
                         <summary className="btn-ghost cursor-pointer list-none">
                           Catat
                         </summary>
@@ -163,6 +169,7 @@ export default async function Jadwal({ searchParams }: { searchParams: { error?:
                         </form>
                       </details>
                     )}
+                    </div>
                   </div>
                   {s.type === 'strength' ? (
                     // Strength tidak selalu dicatat di Strava: yang lewat tanpa catatan tampil netral, bukan "Terlewat"
@@ -178,6 +185,10 @@ export default async function Jadwal({ searchParams }: { searchParams: { error?:
                 </li>
               ))}
             </ul>
+            <div className="mt-2 border-t border-ink/[0.05] pt-2">
+              <SessionEditor planId={plan.id} week={w} defaultDate={monday < minDate ? minDate : monday} minDate={minDate} maxDate={plan.race_date}
+                trigger={<span className="text-xs font-medium text-ink/45 hover:text-track">+ Tambah sesi</span>} />
+            </div>
           </section>
         );
       })}

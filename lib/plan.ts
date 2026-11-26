@@ -4,6 +4,12 @@ export const MARATHON_KM = 42.195;
 export const PHASES = ['Base', 'Build', 'Spesifik', 'Taper'] as const;
 export type Phase = (typeof PHASES)[number];
 export type SessionType = 'easy' | 'long' | 'tempo' | 'mp' | 'interval' | 'recovery' | 'test' | 'race' | 'strength';
+
+/** Label jenis sesi (dipakai di form ubah/tambah sesi) */
+export const SESSION_TYPES: Record<SessionType, string> = {
+  easy: 'Easy', long: 'Long run', tempo: 'Tempo', interval: 'Interval', mp: 'Pace lomba',
+  recovery: 'Recovery', test: 'Tes', race: 'Lomba', strength: 'Strength',
+};
 export const DAY_NAMES = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 /** Pilihan hari default (0 = Senin) kalau user belum memilih */
 export const DEFAULT_DAYS: Record<number, number[]> = { 3: [1, 3, 6], 4: [1, 3, 5, 6], 5: [1, 2, 3, 5, 6], 6: [1, 2, 3, 4, 5, 6] };

@@ -74,6 +74,7 @@ export interface SessionRow {
   pace_sec: number | null;
   target_sec: number | null;
   notes: string | null;
+  edited: boolean; // diubah/ditambah manual di Jadwal
 }
 
 export interface Activity {

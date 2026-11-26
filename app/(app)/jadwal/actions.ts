@@ -3,7 +3,8 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
 import { requireUser } from '@/lib/session';
-import { addDays, parseClock, todayIn } from '@/lib/dates';
+import { addDays, diffDays, mondayOf, parseClock, todayIn } from '@/lib/dates';
+import { SESSION_TYPES, type SessionType } from '@/lib/plan';
 
 /** Kembali ke Jadwal rencana yang sama (?plan=), dengan pesan error dan/atau lompat ke minggu tertentu */
 function backTo(plan: string, week: string, msg?: string): never {
@@ -83,4 +84,68 @@ export async function deleteManual(f: FormData) {
   revalidatePath('/jadwal');
   revalidatePath('/dashboard');
   backTo(String(f.get('plan') ?? ''), week);
+}
+
+
+/**
+ * Ubah sesi (session_id diisi) atau tambah sesi baru ke rencana (plan). Sesi ditandai edited = true,
+ * jadi halaman Rencana bisa memperingatkan bahwa perubahan ini tertimpa kalau jadwal dibuat ulang.
+ */
+export async function saveSession(f: FormData) {
+  const user = await requireUser();
+  const str = (k: string) => String(f.get(k) ?? '').trim();
+  const planId = Number(str('plan'));
+  const sessionId = Number(str('session_id')) || null;
+  const back = (w: string, m?: string) => backTo(str('plan'), w, m);
+  const [plan] = await db()<{ id: number; start_date: string; race_date: string }[]>`
+    select id, start_date, race_date from plans where id = ${planId} and user_id = ${user.id}`;
+  if (!plan) return back('', 'Rencana tidak ditemukan.');
+
+  const date = str('date');
+  const type = str('type') as SessionType;
+  const strength = type === 'strength';
+  const km = strength ? 0 : Number(str('km').replace(',', '.'));
+  const pace = str('pace') ? parseClock(str('pace')) : null;
+  const title = str('title').slice(0, 80) || SESSION_TYPES[type];
+  const notes = str('notes').slice(0, 200) || null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return back(str('week'), 'Tanggal wajib diisi.');
+  if (date < addDays(plan.start_date, -7) || date > plan.race_date) return back(str('week'), 'Tanggal harus di dalam masa rencana (sampai hari lomba).');
+  if (!(type in SESSION_TYPES)) return back(str('week'), 'Jenis sesi tidak dikenal.');
+  if (!strength && !(km > 0 && km <= 100)) return back(str('week'), 'Jarak harus antara 0,1 dan 100 km.');
+  if (str('pace') && (!pace || pace < 120 || pace > 1200)) return back(str('week'), 'Format pace salah. Contoh: 5:45 (menit:detik per km).');
+
+  // Minggu & fase ikut tanggal baru: fase diambil dari sesi lain di minggu itu
+  const week = Math.floor(diffDays(mondayOf(plan.start_date), mondayOf(date)) / 7) + 1;
+  const [ph] = await db()<{ phase: string }[]>`
+    select phase from sessions where plan_id = ${plan.id} and week = ${week} and id <> ${sessionId ?? 0} limit 1`;
+  const phase = ph?.phase ?? (date >= addDays(plan.race_date, -6) ? 'Taper' : 'Base');
+
+  if (sessionId) {
+    const res = await db()`
+      update sessions set date = ${date}, week = ${week}, phase = ${phase}, type = ${type}, title = ${title},
+        distance_km = ${km}, pace_sec = ${strength ? null : pace},
+        target_sec = case when ${type} in ('test', 'race') then target_sec else null end,
+        notes = ${notes}, edited = true
+      where id = ${sessionId} and plan_id = ${plan.id}`;
+    if (!res.count) return back(str('week'), 'Sesi tidak ditemukan.');
+  } else {
+    await db()`
+      insert into sessions (plan_id, date, week, phase, type, title, distance_km, pace_sec, target_sec, notes, edited)
+      values (${plan.id}, ${date}, ${week}, ${phase}, ${type}, ${title}, ${km}, ${strength ? null : pace}, null, ${notes}, true)`;
+  }
+  revalidatePath('/jadwal');
+  revalidatePath('/dashboard');
+  back(String(week));
+}
+
+export async function deleteSession(f: FormData) {
+  const user = await requireUser();
+  const id = Number(f.get('session_id'));
+  if (id) {
+    await db()`delete from sessions s using plans p
+               where s.id = ${id} and p.id = s.plan_id and p.user_id = ${user.id}`;
+  }
+  revalidatePath('/jadwal');
+  revalidatePath('/dashboard');
+  backTo(String(f.get('plan') ?? ''), String(f.get('week') ?? ''));
 }

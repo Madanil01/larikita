@@ -1,11 +1,12 @@
 import { requireUser } from '@/lib/session';
 import PendingOverlay from '@/components/PendingOverlay';
 import Link from 'next/link';
-import { MAX_PLANS, getPlans, getSessions, type Plan } from '@/lib/db';
-import { diffDays, fmtDuration, fmtLong, fmtShort, todayIn } from '@/lib/dates';
+import { MAX_PLANS, db, getPlans, getSessions, type Plan } from '@/lib/db';
+import { addDays, diffDays, fmtDuration, fmtLong, fmtShort, todayIn } from '@/lib/dates';
 import { DAY_NAMES, DEFAULT_DAYS, DISTANCES, MARATHON_KM, distanceFor, riegel } from '@/lib/plan';
 import { estimateFromStrava } from '@/lib/fitness';
 import Icon from '@/components/Icon';
+import RegenConfirm from '@/components/RegenConfirm';
 import { deletePlan, savePlan } from './actions';
 
 const TZS = ['Asia/Jakarta', 'Asia/Makassar', 'Asia/Jayapura', 'Asia/Singapore', 'Asia/Kuala_Lumpur'];
@@ -87,7 +88,7 @@ function PlanList({ plans, today, error }: { plans: Plan[]; today: string; error
   );
 }
 
-export default async function Rencana({ searchParams }: { searchParams: { error?: string; id?: string; baru?: string } }) {
+export default async function Rencana({ searchParams }: { searchParams: { error?: string; id?: string; baru?: string; ok?: string } }) {
   const user = await requireUser();
   const today = todayIn(user.timezone);
   const plans = await getPlans(user.id);
@@ -102,8 +103,13 @@ export default async function Rencana({ searchParams }: { searchParams: { error?
   const longDay = plan?.long_day ?? runDays[runDays.length - 1];
   const fitAtDist = fit ?Math.round(riegel(fit.sec, MARATHON_KM, dist.km)) : null;
   // Long run terpanjang di rencana (di luar lomba & tes) untuk cek kesiapan
-  const longest = plan
-    ? Math.max(0, ...(await getSessions(plan.id)).filter((s) => s.type === 'long').map((s) => s.distance_km))
+  const planSessions = plan ? await getSessions(plan.id) : [];
+  const longest = Math.max(0, ...planSessions.filter((s) => s.type === 'long').map((s) => s.distance_km));
+  // Untuk popup konfirmasi: sesi yang diubah manual (akan ditimpa) dan catatan lari manual di masa rencana ini
+  const edited = planSessions.filter((s) => s.edited).length;
+  const manualLogs = plan
+    ? (await db()<{ n: number }[]>`select count(*)::int as n from activities where user_id = ${user.id} and manual
+        and local_date between ${addDays(plan.start_date, -2)} and ${plan.race_date}`)[0].n
     : 0;
 
   return (
@@ -121,6 +127,7 @@ export default async function Rencana({ searchParams }: { searchParams: { error?
           </p>
         )}
         {searchParams.error && <p className="rounded-lg border border-bad/30 bg-bad/10 px-3 py-2 text-sm text-bad">{searchParams.error}</p>}
+        {searchParams.ok && <p className="rounded-xl border border-ok/20 bg-ok/10 px-3 py-2 text-sm text-ok">Detail rencana disimpan. Jadwal tidak diubah.</p>}
         <div className="grid gap-4 sm:grid-cols-2">
           <label><span className="label">Nama lomba</span>
             <input name="race_name" required className="input" defaultValue={plan?.race_name ?? ''} placeholder="Jakarta Running Festival" /></label>
@@ -205,7 +212,10 @@ export default async function Rencana({ searchParams }: { searchParams: { error?
             terlalu mepet untuk volume sekarang: pertimbangkan lomba yang lebih jauh tanggalnya atau jarak yang lebih pendek dulu.
           </p>
         )}
-        <button className="btn">{plan ? 'Simpan & buat ulang jadwal' : 'Buat jadwal'}</button>
+        {plan ? <RegenConfirm edited={edited} manualLogs={manualLogs} /> : <button className="btn">Buat jadwal</button>}
+        {plan && edited > 0 && (
+          <p className="text-xs text-info">{edited} sesi di rencana ini sudah kamu ubah manual di Jadwal (bertanda “diubah”).</p>
+        )}
         {plan && <p className="text-xs text-ink/40">Membuat ulang jadwal akan mengganti semua sesi rencana ini (rencana lain tidak berubah). Data lari Strava tidak terhapus dan akan dicocokkan ulang.</p>}
       </form>
       <aside className="card space-y-3 text-sm text-ink/70">

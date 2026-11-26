@@ -99,3 +99,6 @@ create table if not exists analyses (
   created_at  timestamptz not null default now(),
   primary key (user_id, date)
 );
+
+-- Migrasi: sesi yang diubah/ditambah manual di Jadwal (akan tertimpa kalau rencana dibuat ulang)
+alter table sessions add column if not exists edited boolean not null default false;

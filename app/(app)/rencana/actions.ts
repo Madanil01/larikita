@@ -30,6 +30,22 @@ export async function savePlan(form: FormData) {
     const [{ n }] = await db()<{ n: number }[]>`select count(*)::int as n from plans where user_id = ${user.id}`;
     if (n >= MAX_PLANS) redirect('/rencana?error=' + encodeURIComponent(`Maksimal ${MAX_PLANS} rencana. Hapus rencana lama dulu.`));
   }
+
+  // "Simpan detail saja" dari popup: ganti nama lomba / judul target / zona waktu, jadwal (termasuk sesi manual) tidak disentuh
+  if (planId && str('mode') === 'info') {
+    const raceName = str('race_name').slice(0, 120);
+    if (!raceName) return fail('Nama lomba wajib diisi.');
+    await db().begin(async (tx) => {
+      await tx`update users set timezone = ${str('timezone') || user.timezone} where id = ${user.id}`;
+      await tx`update plans set race_name = ${raceName}, goal_title = ${str('goal_title') || null} where id = ${planId}`;
+      // judul sesi lomba = nama lomba (kecuali sudah diubah manual)
+      await tx`update sessions set title = ${raceName} where plan_id = ${planId} and type = 'race' and not edited`;
+    });
+    revalidatePath('/dashboard');
+    revalidatePath('/jadwal');
+    redirect(`/rencana?id=${planId}&ok=1`);
+  }
+
   const dist = distanceFor(Number(str('race_km')));
   // 5K/10K: "mm:dd" dibaca menit:detik. HM/FM: "j:mm" dibaca jam:menit. "j:mm:dd" selalu jam:menit:detik.
   const targetSec = dist.km <= 10 ? parseShortTime(str('target')) : parseDuration(str('target'));
